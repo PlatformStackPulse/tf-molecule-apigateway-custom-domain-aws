@@ -1,38 +1,36 @@
-# Molecule: API Gateway Custom Domain with Route53 DNS (REST API v1)
+# Molecule: API Gateway Custom Domain (Domain Name + Base Path Mapping + Route53 Record)
 
-module "domain_name" {
-  source = "git::https://github.com/PlatformStackPulse/tf-atom-apigateway-domain-name-aws.git?ref=2f2337934bc3ec9b623774a0112cc033a3ae0dd5"
+resource "aws_api_gateway_domain_name" "this" {
+  count = module.this.enabled ? 1 : 0
 
-  context                  = module.this.context
   domain_name              = var.domain_name
   regional_certificate_arn = var.certificate_arn
-  endpoint_type            = var.endpoint_type
+
+  endpoint_configuration {
+    types = [var.endpoint_type]
+  }
+
+  tags = module.this.tags
 }
 
-module "base_path_mapping" {
-  source = "git::https://github.com/PlatformStackPulse/tf-atom-apigateway-base-path-mapping-aws.git?ref=5a977cadc610936b62ecdc5651babfb0f1f61de1"
+resource "aws_api_gateway_base_path_mapping" "this" {
+  count = module.this.enabled ? 1 : 0
 
-  context     = module.this.context
-  domain_name = module.domain_name.domain_name
-  rest_api_id = var.rest_api_id
+  api_id      = var.rest_api_id
   stage_name  = var.stage_name
-
-  depends_on = [module.domain_name]
+  domain_name = aws_api_gateway_domain_name.this[0].domain_name
 }
 
-module "dns_record" {
-  source = "git::https://github.com/PlatformStackPulse/tf-atom-route53-record-aws.git?ref=e83e2ca88dc9d9681a321785b6cf623d81cca814"
+resource "aws_route53_record" "this" {
+  count = module.this.enabled ? 1 : 0
 
-  context = module.this.context
   zone_id = var.zone_id
   name    = var.domain_name
   type    = "A"
 
-  alias = {
-    name                   = module.domain_name.regional_domain_name
-    zone_id                = module.domain_name.regional_zone_id
+  alias {
+    name                   = aws_api_gateway_domain_name.this[0].regional_domain_name
+    zone_id                = aws_api_gateway_domain_name.this[0].regional_zone_id
     evaluate_target_health = true
   }
-
-  depends_on = [module.domain_name]
 }
