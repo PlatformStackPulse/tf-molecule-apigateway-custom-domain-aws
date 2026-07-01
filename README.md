@@ -1,6 +1,36 @@
 # tf-molecule-apigateway-custom-domain-aws
 
-Terraform molecule (PlatformStackPulse). See the module documentation below.
+Terraform molecule that fronts an API Gateway REST API with a custom domain: it provisions the API Gateway regional domain name, wires a base path mapping to a stage, and publishes a Route53 alias `A` record pointing at the regional endpoint.
+
+## Features
+
+- **Regional custom domain** — creates an `aws_api_gateway_domain_name` bound to an ACM certificate (`REGIONAL` by default, `EDGE` supported via `endpoint_type`).
+- **Stage base path mapping** — maps the custom domain to a REST API stage (`aws_api_gateway_base_path_mapping`) so callers reach your API at the vanity host.
+- **Route53 alias record** — publishes an `A` alias record in the hosted zone, targeting the regional domain name / zone with `evaluate_target_health = true`.
+- **tf-label naming & tagging** — inherits the tf-label `context` interface for consistent IDs and tags; set `enabled = false` to create nothing.
+
+## Usage
+
+```hcl
+module "api_custom_domain" {
+  source = "git::https://github.com/PlatformStackPulse/tf-molecule-apigateway-custom-domain-aws.git?ref=v1.0.0"
+
+  # tf-label naming
+  namespace = "eg"
+  stage     = "prod"
+  name      = "api"
+
+  # Required inputs
+  domain_name     = "api.example.com"
+  certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/abcd-1234"
+  rest_api_id     = aws_api_gateway_rest_api.this.id
+  stage_name      = "prod"
+  zone_id         = "Z0123456789ABCDEFGHIJ"
+
+  # Optional
+  endpoint_type = "REGIONAL"
+}
+```
 
 <!-- BEGIN_TF_DOCS -->
 ### Requirements
@@ -66,3 +96,18 @@ Terraform molecule (PlatformStackPulse). See the module documentation below.
 | <a name="output_regional_domain_name"></a> [regional\_domain\_name](#output\_regional\_domain\_name) | Regional domain name for the custom domain |
 | <a name="output_regional_zone_id"></a> [regional\_zone\_id](#output\_regional\_zone\_id) | Regional zone ID for the custom domain |
 <!-- END_TF_DOCS -->
+
+## Tests
+
+Unit tests live in `tests/unit/` and use a mock AWS provider (no real AWS calls, no credentials required). They assert on plan-known values only — resource counts, input pass-throughs, and the default endpoint type — and cover both the enabled and `enabled = false` paths.
+
+```bash
+# Unit tests (mock provider)
+terraform init -backend=false
+terraform test -test-directory=tests/unit
+
+# Or via the Makefile
+make test-unit
+```
+
+Integration tests (if present under `tests/integration/`) require real AWS credentials and run with `make test-integration`.
